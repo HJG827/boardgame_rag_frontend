@@ -3,28 +3,33 @@ logs
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-.DS_Store
-dist
-dist-ssr
-coverage
+# node_modules & build
+node_modules/
+dist/
+dist-ssr/
+coverage/
+*.tsbuildinfo
+
+# 환경 파일
+.env
 *.local
 
+# Cypress (사용 중이면 유지!)
 /cypress/videos/
 /cypress/screenshots/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# macOS/Windows/IDE
+.DS_Store
+.vscode/
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-*.tsbuildinfo
+# VSCode 추천 확장만 커밋 허용
+!.vscode/extensions.json
