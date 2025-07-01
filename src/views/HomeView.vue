@@ -1,9 +1,7 @@
 <template>
   <div class="w-screen h-screen flex flex-col bg-gray-100">
-    <!-- 헤더 -->
     <header class="text-center p-4 font-bold text-xl bg-white border-b">보드게임 룰 설명 봇</header>
 
-    <!-- 게임 선택 -->
     <div class="p-4 flex justify-center">
       <div class="w-full max-w-4xl">
         <label class="block text-gray-700 text-sm font-medium mb-2">게임을 선택해주세요.</label>
@@ -14,12 +12,8 @@
       </div>
     </div>
 
-    <!-- 채팅 내용 -->
     <div class="flex-1 min-h-0 flex justify-center px-4">
-      <div
-        ref="chatBox"
-        class="chat-scroll w-full max-w-4xl space-y-4 overflow-y-auto pr-2 pb-4"
-      >
+      <div ref="chatBox" class="chat-scroll w-full max-w-4xl space-y-4 overflow-y-auto pr-2 pb-4">
         <div
           v-for="(msg, i) in messages"
           :key="i"
@@ -27,18 +21,16 @@
           :class="msg.isBot ? 'justify-start' : 'justify-end'"
         >
           <div
-            class="max-w-[70%] p-4 rounded-2xl whitespace-pre-wrap break-words"
+            class="max-w-[70%] px-5 py-2.5 rounded-[1.5rem] break-words markdown-body"
             :class="msg.isBot
-              ? 'bg-purple-100 text-black rounded-bl-none'
-              : 'bg-purple-300 text-white rounded-br-none'"
-          >
-            {{ msg.text }}
-          </div>
+              ? 'bg-purple-100 text-black text-left'
+              : 'bg-purple-300 text-white text-left'"
+            v-html="msg.text"
+          ></div>
         </div>
       </div>
     </div>
 
-    <!-- 입력창 -->
     <form @submit.prevent="sendMessage" class="p-4 border-t bg-white w-full flex justify-center">
       <div class="w-full max-w-4xl flex gap-2">
         <input
@@ -54,6 +46,11 @@
 
 <script setup>
 import { ref, nextTick } from 'vue'
+import { marked } from 'marked'
+
+marked.use({
+  breaks: true
+})
 
 const selectedGame = ref('카탄')
 const userInput = ref('')
@@ -71,18 +68,33 @@ const scrollToBottom = () => {
 
 const sendMessage = () => {
   if (!userInput.value.trim()) return
-  messages.value.push({ text: userInput.value, isBot: false })
+
+  messages.value.push({
+    text: escapeHtml(userInput.value).replace(/\n/g, '<br>'),
+    isBot: false
+  })
   userInput.value = ''
   scrollToBottom()
 
   setTimeout(() => {
-    messages.value.push({
-      text: `${selectedGame.value}에 대한 질문을 인식했어요! 곧 자세한 답변을 드릴게요.`,
-      isBot: true
-    })
+    const rawMd = `**${selectedGame.value}**에 대한 질문을 인식했어요!\n곧 자세한 답변을 드릴게요!`
+    const parsed = marked.parse(rawMd)
+    messages.value.push({ text: parsed, isBot: true })
     scrollToBottom()
   }, 500)
 }
+
+const escapeHtml = (text) =>
+  text.replace(/[&<>"']/g, (match) => {
+    const escape = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }
+    return escape[match]
+  })
 </script>
 
 <style>
@@ -106,5 +118,21 @@ const sendMessage = () => {
 }
 .chat-scroll::-webkit-scrollbar-track {
   background-color: transparent;
+}
+
+.markdown-body {
+  line-height: 1.5;
+  text-align: left;
+}
+
+.markdown-body p {
+  margin: 0 !important;  /* 💥 여백 제거 핵심 */
+  padding: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.markdown-body strong {
+  font-weight: bold;
 }
 </style>
