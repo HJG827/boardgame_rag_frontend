@@ -2,15 +2,25 @@
   <div class="w-screen h-screen flex flex-col bg-gray-100">
     <header class="text-center p-4 font-bold text-xl bg-white border-b">보드게임 룰 설명 봇</header>
 
-    <div class="p-4 flex justify-center">
-      <div class="w-full max-w-4xl">
-        <label class="block text-gray-700 text-sm font-medium mb-2">게임을 선택해주세요.</label>
-        <select v-model="selectedGame" class="w-full p-3 rounded border text-base">
-          <option value="카탄">카탄</option>
-          <option value="스플렌더">스플렌더</option>
-        </select>
+    <!-- 🧠 드롭다운 + 직접 입력 통합 -->
+  <div class="p-4 flex justify-center">
+    <div class="w-full max-w-4xl">
+      <label class="block text-gray-700 text-sm font-medium mb-2">게임을 선택해주세요.</label>
+      <select v-model="selectedGame" class="w-full p-3 rounded border text-base">
+        <option disabled value="">게임 선택</option>
+        <option v-for="game in gameOptions" :key="game.eng" :value="game.eng">
+          {{ game.kor }}
+        </option>
+        <option value="custom">직접 입력</option>
+      </select>
+
+      <!-- ✏️ 직접 입력창은 선택 시에만 나타남 -->
+      <div v-if="selectedGame === 'custom'" class="mt-2">
+        <input v-model="customGame" class="w-full p-3 border rounded text-base" placeholder="게임명을 직접 입력하세요 (예: 할리갈리)" />
       </div>
     </div>
+  </div>
+
 
     <div class="flex-1 min-h-0 flex justify-center px-4">
       <div ref="chatBox" class="chat-scroll w-full max-w-4xl space-y-4 overflow-y-auto pr-2 pb-4">
@@ -41,7 +51,17 @@ marked.use({
   breaks: true
 })
 
-const selectedGame = ref('카탄')
+// 🧠 script setup 상단에
+const selectedGame = ref('')
+const customGame = ref('')
+
+// 드롭다운 옵션 (한글은 보여주기용, 영문은 백엔드 전송용)
+const gameOptions = [
+  { kor: "카탄", eng: "katan" },
+  { kor: "스플렌더", eng: "splendor" },
+  // 여기 추가 가능
+]
+
 const userInput = ref('')
 const messages = ref([])
 
@@ -55,10 +75,10 @@ const scrollToBottom = () => {
   })
 }
 
+// 🧠 sendMessage 수정
 const sendMessage = async () => {
   if (!userInput.value.trim()) return
 
-  // 유저 메시지 먼저 표시
   messages.value.push({
     text: escapeHtml(userInput.value).replace(/\n/g, '<br>'),
     isBot: false
@@ -68,10 +88,15 @@ const sendMessage = async () => {
   const questionText = userInput.value
   userInput.value = ''
 
+  // 전송할 게임 이름 결정
+  const gameNameToSend = selectedGame.value === 'custom'
+    ? customGame.value.trim()
+    : selectedGame.value
+
   try {
     const response = await axios.post('http://localhost:8080/api/ask', {
       question: questionText,
-      game: selectedGame.value
+      game: gameNameToSend
     })
 
     const parsed = marked.parse(response.data.answer || '답변을 불러올 수 없습니다.')
@@ -86,6 +111,7 @@ const sendMessage = async () => {
 
   scrollToBottom()
 }
+
 
 
 const escapeHtml = (text) =>
