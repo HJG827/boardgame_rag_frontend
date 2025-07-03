@@ -81,7 +81,12 @@ const allMessages = ref({})
 const chatBox = ref(null)
 const loadingBotIndex = ref(null)  // 현재 로딩 말풍선 index
 const isLoading = ref(false)  // 로딩 중 여부
-
+const isGameSelected = () => {
+  if (selectedGame.value === 'custom') {
+    return customGame.value.trim() !== ''
+  }
+  return selectedGame.value.trim() !== ''
+}
 
 
 const gameOptions = [
@@ -122,7 +127,18 @@ const scrollToBottom = () => {
 }
 
 const sendMessage = async () => {
+  if (!isGameSelected()) {
+    messages.value.push({
+      text: marked.parse('⚠️ 먼저 게임을 선택해주세요!'),
+      isBot: true,
+      game: null
+    })
+    scrollToBottom()
+    return
+  }
+
   if (!userInput.value.trim() || isLoading.value) return  // 이미 전송 중이면 막음!!
+
 
   isLoading.value = true  // 전송 시작
 
