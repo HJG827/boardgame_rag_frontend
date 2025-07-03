@@ -85,10 +85,20 @@ const isLoading = ref(false)  // 로딩 중 여부
 
 
 const gameOptions = [
-  { kor: "카탄", eng: "katan" },
-  { kor: "스플렌더", eng: "splendor" },
-  { kor: "낫쏘", eng: "nassau" },
+  { kor: "더 마인드", eng: "TheMind" },
+  { kor: "달무티", eng: "Dalmuti" },
+  { kor: "라비린스", eng: "Labyrinth" },
+  { kor: "루미큐브", eng: "Rummikub" },
+  { kor: "메이플 벨리", eng: "MapleValley" },
+  { kor: "블로커스", eng: "Blokus" },
+  { kor: "스플렌더", eng: "Splendor" },
+  { kor: "카탄", eng: "Katan" },
+  { kor: "퀀텀", eng: "Qwantum" },
+  { kor: "낫쏘", eng: "Nassau" },
+  { kor: "할리갈리", eng: "HalliGalli" }
 ]
+
+
 
 const getCurrentGameKey = () => selectedGame.value === 'custom' ? customGame.value.trim() : selectedGame.value
 
