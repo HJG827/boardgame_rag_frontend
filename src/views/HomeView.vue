@@ -2,33 +2,45 @@
   <div class="w-screen h-screen flex flex-col bg-gray-100">
     <header class="text-center p-4 font-bold text-xl bg-white border-b">보드게임 룰 설명 봇</header>
 
-    <!-- 🧠 드롭다운 + 직접 입력 통합 -->
+    <!-- 🧠 자동완성 게임 선택 -->
     <div class="p-4 flex justify-center">
       <div class="w-full max-w-4xl">
-        <label class="block text-gray-700 text-sm font-medium mb-2">게임을 선택해주세요.</label>
+        <label class="block text-gray-700 text-sm font-medium mb-2">게임을 입력하거나 선택해주세요.</label>
         <div class="relative">
-        <select v-model="selectedGame"
-                class="w-full py-3 px-3 pr-10 rounded border text-base appearance-none">
-          <option disabled value="">게임 선택</option>
-          <option v-for="game in gameOptions" :key="game.eng" :value="game.eng">
-            {{ game.kor }}
-          </option>
-          <option value="custom">직접 입력</option>
-        </select>
+          <input
+            ref="inputEl"
+            v-model="customGame"
+            @input="filterGameOptions"
+            @keydown.down.prevent="highlightNext"
+            @keydown.up.prevent="highlightPrev"
+            @keydown.enter.prevent="selectHighlightedOption"
+            @focus="showSuggestions = true; filterGameOptions()"
+            @blur="hideSuggestions"
+            class="w-full py-3 px-3 rounded border text-base"
+            placeholder="게임명을 입력하세요 (예: 할리갈리)"
+          />
+          <!-- 🔽 자동완성 목록 -->
+          <ul
+  v-if="showSuggestions && filteredOptions.length"
+  class="absolute z-10 bg-white border w-full mt-1 rounded shadow-md auto-suggest-scroll"
+>
 
-        <!-- 🔽 화살표 커스텀 -->
-        <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-          <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" stroke-width="2"
-              viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        </div>
-      </div>
-
-
-        <!-- ✏️ 직접 입력창은 선택 시에만 나타남 -->
-        <div v-if="selectedGame === 'custom'" class="mt-2">
-          <input v-model="customGame" class="w-full p-3 border rounded text-base" placeholder="게임명을 직접 입력하세요 (예: 할리갈리)" />
+            <li
+              v-for="(option, index) in filteredOptions"
+              :key="option.eng"
+              @mousedown.prevent="selectSuggestion(option)"
+              :class="[
+                'px-4 py-2 hover:bg-gray-100 cursor-pointer',
+                index === highlightedIndex ? 'bg-gray-200' : ''
+              ]"
+            >
+              {{ option.kor }}
+            </li>
+          </ul>
+          <!-- ⚠️ 안내 문구 -->
+          <p v-if="customGame && isUnknownGame" class="text-sm text-gray-500 mt-1">
+            ※ 보유하고 있지 않은 게임을 입력해서 정확도가 떨어질 수 있습니다.
+          </p>
         </div>
       </div>
     </div>
@@ -52,44 +64,43 @@
       <div class="w-full max-w-4xl flex gap-2">
         <input v-model="userInput" class="flex-1 p-3 border rounded text-base" placeholder="질문을 입력해주세요." />
         <button
-  type="submit"
-  class="px-4 py-2 rounded text-base transition duration-200"
-  :class="isLoading
-    ? 'bg-purple-300 text-white cursor-not-allowed'
-    : 'bg-purple-500 text-white hover:bg-purple-600'"
-  :disabled="isLoading">
-  전송
-</button>
-
+          type="submit"
+          class="px-4 py-2 rounded text-base transition duration-200"
+          :class="isLoading
+            ? 'bg-purple-300 text-white cursor-not-allowed'
+            : 'bg-purple-500 text-white hover:bg-purple-600'"
+          :disabled="isLoading">
+          전송
+        </button>
       </div>
     </form>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, computed } from 'vue'
 import { marked } from 'marked'
 import axios from 'axios'
+import Hangul from 'hangul-js'
 
 marked.use({ breaks: true })
 
-const selectedGame = ref('')
 const customGame = ref('')
 const userInput = ref('')
 const messages = ref([])
 const allMessages = ref({})
 const chatBox = ref(null)
-const loadingBotIndex = ref(null)  // 현재 로딩 말풍선 index
-const isLoading = ref(false)  // 로딩 중 여부
-const isGameSelected = () => {
-  if (selectedGame.value === 'custom') {
-    return customGame.value.trim() !== ''
-  }
-  return selectedGame.value.trim() !== ''
-}
+const inputEl = ref(null)
+const loadingBotIndex = ref(null)
+const isLoading = ref(false)
+const highlightedIndex = ref(-1)
 
+const isUnknownGame = computed(() => {
+  return customGame.value && !gameOptions.some(opt => opt.kor === customGame.value)
+})
 
 const gameOptions = [
+  { kor: "낫쏘", eng: "Nassau" },
   { kor: "더 마인드", eng: "TheMind" },
   { kor: "달무티", eng: "Dalmuti" },
   { kor: "라비린스", eng: "Labyrinth" },
@@ -99,21 +110,54 @@ const gameOptions = [
   { kor: "스플렌더", eng: "Splendor" },
   { kor: "카탄", eng: "Katan" },
   { kor: "퀀텀", eng: "Qwantum" },
-  { kor: "낫쏘", eng: "Nassau" },
   { kor: "할리갈리", eng: "HalliGalli" }
 ]
 
+const filteredOptions = ref([])
+const showSuggestions = ref(false)
 
+const matchKorean = (input, target) => Hangul.search(target, input) > -1
 
-const getCurrentGameKey = () => selectedGame.value === 'custom' ? customGame.value.trim() : selectedGame.value
-
-const getGameKorName = (eng) => {
-  if (eng === 'custom') return customGame.value
-  const found = gameOptions.find(g => g.eng === eng)
-  return found ? found.kor : eng
+const filterGameOptions = () => {
+  const keyword = customGame.value.trim()
+  if (!keyword) {
+    filteredOptions.value = [...gameOptions] // 처음에 전체 보여주기
+    highlightedIndex.value = -1
+    return
+  }
+  filteredOptions.value = gameOptions.filter(game => matchKorean(keyword, game.kor))
+  highlightedIndex.value = -1
 }
 
-watch([selectedGame, customGame], () => {
+const highlightNext = () => {
+  if (!filteredOptions.value.length) return
+  highlightedIndex.value = (highlightedIndex.value + 1) % filteredOptions.value.length
+}
+
+const highlightPrev = () => {
+  if (!filteredOptions.value.length) return
+  highlightedIndex.value = (highlightedIndex.value - 1 + filteredOptions.value.length) % filteredOptions.value.length
+}
+
+const selectHighlightedOption = () => {
+  if (highlightedIndex.value >= 0) {
+    selectSuggestion(filteredOptions.value[highlightedIndex.value])
+  }
+}
+
+const hideSuggestions = () => {
+  setTimeout(() => { showSuggestions.value = false }, 200)
+}
+
+const selectSuggestion = (option) => {
+  customGame.value = option.kor
+  showSuggestions.value = false
+}
+
+const getCurrentGameKey = () => customGame.value.trim()
+const getGameKorName = (eng) => customGame.value
+
+watch(customGame, () => {
   const key = getCurrentGameKey()
   messages.value = allMessages.value[key] || []
 })
@@ -127,7 +171,7 @@ const scrollToBottom = () => {
 }
 
 const sendMessage = async () => {
-  if (!isGameSelected()) {
+  if (!customGame.value.trim()) {
     messages.value.push({
       text: marked.parse('⚠️ 먼저 게임을 선택해주세요!'),
       isBot: true,
@@ -137,10 +181,9 @@ const sendMessage = async () => {
     return
   }
 
-  if (!userInput.value.trim() || isLoading.value) return  // 이미 전송 중이면 막음!!
+  if (!userInput.value.trim() || isLoading.value) return
 
-
-  isLoading.value = true  // 전송 시작
+  isLoading.value = true
 
   const gameKey = getCurrentGameKey()
   const questionText = userInput.value
@@ -201,16 +244,16 @@ const sendMessage = async () => {
     messages.value.push(errorMsg)
     allMessages.value[gameKey] = [...messages.value]
   } finally {
-    isLoading.value = false  // 전송 끝!
+    isLoading.value = false
   }
 }
-
 
 const escapeHtml = (text) =>
   text.replace(/[&<>"']/g, (match) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[match]))
 </script>
+
 
 <style>
 .chat-scroll {
@@ -285,5 +328,29 @@ const escapeHtml = (text) =>
   }
 }
 
+.auto-suggest-scroll {
+  max-height: calc(2.5rem * 6); /* 각 항목 높이 약 2.5rem × 6개 */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(216, 180, 254, 0.3) transparent;
+}
+
+.auto-suggest-scroll::-webkit-scrollbar {
+  width: 8px;
+  visibility: hidden;
+}
+
+.auto-suggest-scroll:hover::-webkit-scrollbar {
+  visibility: visible;
+}
+
+.auto-suggest-scroll::-webkit-scrollbar-thumb {
+  background-color: #d8b4fe;
+  border-radius: 10px;
+}
+
+.auto-suggest-scroll::-webkit-scrollbar-track {
+  background-color: transparent;
+}
 
 </style>
