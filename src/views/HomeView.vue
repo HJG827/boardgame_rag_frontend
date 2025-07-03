@@ -115,7 +115,8 @@ const sendMessage = async () => {
   // console.log("🌟 history:", history)
 
   try {
-    const res = await axios.post('http://localhost:8080/api/ask', {
+    const res = await axios.post('https://boardgame-rag-billowing-sea-7165.fly.dev/api/rag', {
+
       question: questionText,
       game: gameKey,
       history: history
