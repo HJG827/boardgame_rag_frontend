@@ -25,17 +25,19 @@
   class="absolute z-10 bg-white border w-full mt-1 rounded shadow-md auto-suggest-scroll"
 >
 
-            <li
-              v-for="(option, index) in filteredOptions"
-              :key="option.eng"
-              @mousedown.prevent="selectSuggestion(option)"
-              :class="[
-                'px-4 py-2 hover:bg-gray-100 cursor-pointer',
-                index === highlightedIndex ? 'bg-gray-200' : ''
-              ]"
-            >
-              {{ option.kor }}
-            </li>
+                <li
+      v-for="(option, index) in filteredOptions"
+      :key="option.eng"
+      @mousedown.prevent="selectSuggestion(option)"
+      :ref="el => suggestionRefs[index] = el"
+      :class="[
+        'px-4 py-2 hover:bg-gray-100 cursor-pointer',
+        index === highlightedIndex ? 'bg-gray-200' : ''
+      ]"
+    >
+      {{ option.kor }}
+    </li>
+
           </ul>
           <!-- ⚠️ 안내 문구 -->
           <p v-if="customGame && isUnknownGame" class="text-sm text-gray-500 mt-1">
@@ -94,10 +96,14 @@ const inputEl = ref(null)
 const loadingBotIndex = ref(null)
 const isLoading = ref(false)
 const highlightedIndex = ref(-1)
+const suggestionRefs = ref([])
+
 
 const isUnknownGame = computed(() => {
-  return customGame.value && !gameOptions.some(opt => opt.kor === customGame.value)
+  const trimmedValue = customGame.value.trim()
+  return trimmedValue && !gameOptions.some(opt => opt.kor === trimmedValue)
 })
+
 
 const gameOptions = [
   { kor: "낫쏘", eng: "Nassau" },
@@ -128,16 +134,27 @@ const filterGameOptions = () => {
   filteredOptions.value = gameOptions.filter(game => matchKorean(keyword, game.kor))
   highlightedIndex.value = -1
 }
+const scrollToHighlighted = () => {
+  nextTick(() => {
+    const el = suggestionRefs.value[highlightedIndex.value]
+    if (el?.scrollIntoView) {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  })
+}
 
 const highlightNext = () => {
   if (!filteredOptions.value.length) return
   highlightedIndex.value = (highlightedIndex.value + 1) % filteredOptions.value.length
+  scrollToHighlighted()
 }
 
 const highlightPrev = () => {
   if (!filteredOptions.value.length) return
   highlightedIndex.value = (highlightedIndex.value - 1 + filteredOptions.value.length) % filteredOptions.value.length
+  scrollToHighlighted()
 }
+
 
 const selectHighlightedOption = () => {
   if (highlightedIndex.value >= 0) {
@@ -154,7 +171,12 @@ const selectSuggestion = (option) => {
   showSuggestions.value = false
 }
 
-const getCurrentGameKey = () => customGame.value.trim()
+const getCurrentGameKey = () => {
+  const trimmed = customGame.value.trim()
+  const matched = gameOptions.find(g => g.kor === trimmed)
+  return matched ? matched.eng : trimmed
+}
+
 const getGameKorName = (eng) => customGame.value
 
 watch(customGame, () => {
@@ -209,9 +231,11 @@ const sendMessage = async () => {
 
   const filtered = messages.value.filter(m => m.game === gameKey)
   const history = []
-  for (let i = 0; i < filtered.length - 1; i++) {
-    const user = filtered[i]
-    const bot = filtered[i + 1]
+  const sliced = filtered.slice(0, -2)
+
+  for (let i = 0; i < sliced.length - 1; i++) {
+    const user = sliced[i]
+    const bot = sliced[i + 1]
     if (!user.isBot && bot?.isBot) {
       history.push({ role: 'user', content: user.text.replace(/<br>/g, '\n') })
       history.push({ role: 'assistant', content: bot.text.replace(/<br>/g, '\n') })
@@ -219,6 +243,8 @@ const sendMessage = async () => {
   }
 
   try {
+
+
     const res = await axios.post('https://boardgame-client.fly.dev/api/ask', {
       question: questionText,
       game: gameKey,
