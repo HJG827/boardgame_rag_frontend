@@ -6,13 +6,25 @@
     <div class="p-4 flex justify-center">
       <div class="w-full max-w-4xl">
         <label class="block text-gray-700 text-sm font-medium mb-2">게임을 선택해주세요.</label>
-        <select v-model="selectedGame" class="w-full p-3 rounded border text-base">
+        <div class="relative">
+        <select v-model="selectedGame"
+                class="w-full py-3 px-3 pr-10 rounded border text-base appearance-none">
           <option disabled value="">게임 선택</option>
           <option v-for="game in gameOptions" :key="game.eng" :value="game.eng">
             {{ game.kor }}
           </option>
           <option value="custom">직접 입력</option>
         </select>
+
+        <!-- 🔽 화살표 커스텀 -->
+        <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" stroke-width="2"
+              viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </div>
+      </div>
+
 
         <!-- ✏️ 직접 입력창은 선택 시에만 나타남 -->
         <div v-if="selectedGame === 'custom'" class="mt-2">
@@ -39,7 +51,16 @@
     <form @submit.prevent="sendMessage" class="p-4 border-t bg-white w-full flex justify-center">
       <div class="w-full max-w-4xl flex gap-2">
         <input v-model="userInput" class="flex-1 p-3 border rounded text-base" placeholder="질문을 입력해주세요." />
-        <button type="submit" class="px-4 py-2 bg-purple-500 text-white rounded text-base">전송</button>
+        <button
+  type="submit"
+  class="px-4 py-2 rounded text-base transition duration-200"
+  :class="isLoading
+    ? 'bg-purple-300 text-white cursor-not-allowed'
+    : 'bg-purple-500 text-white hover:bg-purple-600'"
+  :disabled="isLoading">
+  전송
+</button>
+
       </div>
     </form>
   </div>
@@ -58,10 +79,15 @@ const userInput = ref('')
 const messages = ref([])
 const allMessages = ref({})
 const chatBox = ref(null)
+const loadingBotIndex = ref(null)  // 현재 로딩 말풍선 index
+const isLoading = ref(false)  // 로딩 중 여부
+
+
 
 const gameOptions = [
   { kor: "카탄", eng: "katan" },
   { kor: "스플렌더", eng: "splendor" },
+  { kor: "낫쏘", eng: "nassau" },
 ]
 
 const getCurrentGameKey = () => selectedGame.value === 'custom' ? customGame.value.trim() : selectedGame.value
@@ -86,7 +112,9 @@ const scrollToBottom = () => {
 }
 
 const sendMessage = async () => {
-  if (!userInput.value.trim()) return
+  if (!userInput.value.trim() || isLoading.value) return  // 이미 전송 중이면 막음!!
+
+  isLoading.value = true  // 전송 시작
 
   const gameKey = getCurrentGameKey()
   const questionText = userInput.value
@@ -96,11 +124,20 @@ const sendMessage = async () => {
     isBot: false,
     game: gameKey
   }
+
   messages.value.push(userMsg)
   userInput.value = ''
   scrollToBottom()
 
-  // history 구성 (현재 질문 포함 X)
+  const loadingMsg = {
+    text: `<div class="typing-indicator"><span></span><span></span><span></span></div>`,
+    isBot: true,
+    game: gameKey
+  }
+  messages.value.push(loadingMsg)
+  loadingBotIndex.value = messages.value.length - 1
+  scrollToBottom()
+
   const filtered = messages.value.filter(m => m.game === gameKey)
   const history = []
   for (let i = 0; i < filtered.length - 1; i++) {
@@ -113,7 +150,6 @@ const sendMessage = async () => {
   }
 
   try {
-
     const res = await axios.post('https://boardgame-client.fly.dev/api/ask', {
       question: questionText,
       game: gameKey,
@@ -121,17 +157,14 @@ const sendMessage = async () => {
     })
 
     const parsed = marked.parse(res.data.answer || '답변을 불러올 수 없습니다.')
-    const botMsg = {
+    messages.value.splice(loadingBotIndex.value, 1, {
       text: parsed,
       isBot: true,
       game: gameKey
-    }
-    messages.value.push(botMsg)
+    })
+    loadingBotIndex.value = null
     scrollToBottom()
-
-    // 메시지 백업
     allMessages.value[gameKey] = [...messages.value]
-
   } catch (err) {
     console.error('❌ 서버 오류:', err)
     const errorMsg = {
@@ -141,8 +174,11 @@ const sendMessage = async () => {
     }
     messages.value.push(errorMsg)
     allMessages.value[gameKey] = [...messages.value]
+  } finally {
+    isLoading.value = false  // 전송 끝!
   }
 }
+
 
 const escapeHtml = (text) =>
   text.replace(/[&<>"']/g, (match) => ({
@@ -183,4 +219,45 @@ const escapeHtml = (text) =>
 .markdown-body strong {
   font-weight: bold;
 }
+
+
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+}
+
+.typing-indicator span {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: #7c3aed; /* 보라색 점 */
+  border-radius: 50%;
+  animation: typingBounce 1.2s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation-delay: 0s;
+}
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingBounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+
 </style>
