@@ -115,8 +115,8 @@ const sendMessage = async () => {
   // console.log("🌟 history:", history)
 
   try {
-    const res = await axios.post('https://boardgame-client.fly.dev/api/ask', {
 
+    const res = await axios.post('https://boardgame-client.fly.dev/api/ask', {
       question: questionText,
       game: gameKey,
       history: history
